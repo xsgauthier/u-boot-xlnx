@@ -1,0 +1,192 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Bitmain Antminer S9 board DTS
+ *
+ * Copyright (C) 2018 Michal Simek
+ * Copyright (C) 2018 VanguardiaSur
+ */
+/dts-v1/;
+/include/ "zynq-7000.dtsi"
+
+/ {
+	model = "Bitmain Antminer S9 Board";
+	compatible = "bitmain,antminer-s9", "xlnx,zynq-7000";
+
+	aliases {
+		ethernet0 = &gem0;
+		serial0 = &uart1;
+		serial1 = &axi_uartlite_0;
+		mmc0 = &sdhci0;
+		gpio0 = &gpio0;
+	};
+
+	memory@0 {
+		device_type = "memory";
+		reg = <0x0 0x40000000>;
+	};
+
+	reserved-memory {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		bootcount@efffff0 {
+			reg = <0xefffff0 0x10>;
+			no-map;
+		};
+
+		fpga_space@f000000 {
+			reg = <0xf000000 0x1000000>;
+			no-map;
+		};
+	};
+
+	chosen {
+		bootargs = "earlycon clk_ignore_unused";
+		stdout-path = "serial0:115200n8";
+	};
+
+	leds {
+		compatible = "gpio-leds";
+		led0 {
+			label = "led0:green";
+			gpios = <&gpio0 15 0>;
+			linux,default-trigger = "heartbeat";
+		};
+	};
+
+	fpga_axi: amba_pl {
+		compatible = "simple-bus";
+		#address-cells = <0x1>;
+		#size-cells = <0x1>;
+		ranges;
+		firmware-name = "system_bd_wrapper.bit.bin";
+
+
+		axi_fifo_1: axi_fifo@42c02000 {
+			compatible = "generic-uio";
+			interrupts = <0x0 0x1e 0x4>;
+			interrupt-parent = <&intc>;
+			reg = <0x42c02000 0x2000>;
+			clocks = <&clkc 0xf>;
+		};
+
+		axi_uartlite_0: serial@42c00000 {
+				phandle = <0x5>;
+				interrupts = <0x0 0x1d 0x1>;
+				compatible = "xlnx,axi-uartlite-1.02.a", "xlnx,axi-uartlite-2.0", "xlnx,xps-uartlite-1.00.a";
+				port-number = <0x0>;
+				xlnx,uartlite-board-interface = "Custom";
+				xlnx,s-axi-aclk-freq-hz-d = <0x32>;
+				interrupt-parent = <&intc>;
+				xlnx,ip-name = "axi_uartlite";
+				reg = <0x42c00000 0x2000>;
+				xlnx,baudrate = <0x2580>;
+				clocks = <&clkc 0xf>;
+				current-speed = <0x2580>;
+				device_type = "serial";
+				xlnx,use-parity = <0x0>;
+				xlnx,edk-iptype = "PERIPHERAL";
+				xlnx,odd-parity = <0x0>;
+				status = "okay";
+				clock-names = "s_axi_aclk";
+				interrupt-names = "interrupt";
+				xlnx,data-bits = <0x8>;
+				xlnx,parity = "No_Parity";
+		};
+	};
+
+	clocking0: clocking0 {
+			phandle = <0x4b>;
+			compatible = "xlnx,fclk";
+			assigned-clocks = <&clkc 0xf>;
+			assigned-clock-rates = <0x2faf080>;
+			#clock-cells = <0x0>;
+			clock-output-names = "fabric_clk";
+			clocks = <&clkc 0xf>;
+	};
+	
+};
+
+&clkc {
+	ps-clk-frequency = <33333333>;
+};
+
+&nfc0 {
+	status = "okay";
+};
+
+&smcc {
+	status = "okay";
+};
+
+&gem0 {
+	status = "okay";
+	phy-mode = "rgmii-id";
+	xlnx,ptp-enet-clock = <0x69f6bcb>;
+	phy-handle = <&ethernet_phy>;
+
+	/* 0362/5e62 */
+	ethernet_phy: ethernet-phy@1 {
+		reg = <1>;
+	};
+};
+
+&sdhci0 {
+	u-boot,dm-pre-reloc;
+	bootph-all;
+	status = "okay";
+	disable-wp;
+};
+
+&uart1 {
+	u-boot,dm-pre-reloc;
+	bootph-all;
+	status = "okay";
+};
+
+&spi0 {
+    #address-cells=<1>;     
+    #size-cells=<0>;	
+    status = "okay";	
+    num-cs = <1>;
+    bus-num = <0>;
+    is-decoded-cs = <0>;
+	
+    spidev@0x00 {
+        //compatible = "spidev";
+        compatible = "rohm,dh2228fv";
+	
+        /* Max SPI clock frequency via Zynq EMIO is 25MHz */	
+        spi-max-frequency = <25000000>;
+
+        /* slave number - CS */
+        reg = <0>;
+
+        /* Set SPI mode = 0 */		
+        spi-cpol = <0>;	
+        spi-cpha = <0>;
+    };
+};
+
+&i2c0 {
+	status = "okay";
+	clock-frequency = <400000>;
+
+        ads1115@48{
+           compatible = "ads1115";
+           reg = <0x48>;
+        };
+};
+
+&i2c1 {
+	status = "okay";
+	clock-frequency = <400000>;
+
+        ads1115@48{
+           compatible = "ads1115";
+           reg = <0x48>;
+        };
+};
+
+		

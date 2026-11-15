@@ -220,38 +220,8 @@ dtb-$(CONFIG_ARCH_UNIPHIER_PXS3) += \
 dtb-$(CONFIG_ARCH_UNIPHIER_SLD8) += \
 	uniphier-sld8-ref.dtb
 
-dtb-$(CONFIG_ARCH_ZYNQ) += \
-	bitmain-antminer-s9.dtb \
-	zynq-cc108.dtb \
-	zynq-cse-nand.dtb \
-	zynq-cse-nor.dtb \
-	zynq-cse-qspi-single.dtb \
-	zynq-cse-qspi-parallel.dtb \
-	zynq-cse-qspi-stacked.dtb \
-	zynq-cse-qspi-x1-single.dtb \
-	zynq-cse-qspi-x1-stacked.dtb \
-	zynq-cse-qspi-x2-single.dtb \
-	zynq-cse-qspi-x2-stacked.dtb \
-	zynq-dlc20-rev1.0.dtb \
-	zynq-microzed.dtb \
-	zynq-minized.dtb \
-	zynq-picozed.dtb \
-	zynq-syzygy-hub.dtb \
-	zynq-topic-miami.dtb \
-	zynq-topic-miamilite.dtb \
-	zynq-topic-miamiplus.dtb \
-	zynq-zc702.dtb \
-	zynq-zc706.dtb \
-	zynq-zc770-xm010.dtb \
-	zynq-zc770-xm011.dtb \
-	zynq-zc770-xm011-x16.dtb \
-	zynq-zc770-xm012.dtb \
-	zynq-zc770-xm013.dtb \
-	zynq-zed.dtb \
-	zynq-zturn.dtb \
-	zynq-zturn-v5.dtb \
-	zynq-zybo.dtb \
-	zynq-zybo-z7.dtb
+dtb-$(CONFIG_ARCH_ZYNQ) += zynq-ants9.dtb
+
 dtb-$(CONFIG_ARCH_ZYNQMP) += \
 	avnet-ultra96-rev1.dtb			\
 	zynqmp-a2197-revA.dtb			\
