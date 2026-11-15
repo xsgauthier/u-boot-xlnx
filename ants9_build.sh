@@ -96,6 +96,8 @@ echo "Loading Linux uImage and DTB..."
 fatload mmc 0:1 0x08000000 uImage
 fatload mmc 0:1 0x07F00000 zynq-ants9.dtb
 
+setenv ethaddr 26:a4:19:dc:cb:d0
+
 setenv bootargs "mem=496M console=ttyPS0,115200n8 earlycon clk_ignore_unused root=/dev/mmcblk0p2 rootfstype=ext4 rw rootwait uio_pdrv_genirq.of_id=generic-uio"
 bootm 0x08000000 - 0x07F00000
 EOF
