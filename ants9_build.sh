@@ -86,11 +86,17 @@ function generate_boot_script() {
 fatload mmc 0:1 0x2000000 system.bit
 fpga loadb 0 0x2000000 \${filesize}
 
+# Unlock SLCR, enable PS-PL level shifters, release FPGA resets, lock SLCR
+mw.l 0xf8000008 0xdf0d
+mw.l 0xf8000900 0xf
+mw.l 0xf8000240 0x0
+mw.l 0xf8000004 0x767b
+
 echo "Loading Linux uImage and DTB..."
 fatload mmc 0:1 0x08000000 uImage
 fatload mmc 0:1 0x07F00000 zynq-ants9.dtb
 
-setenv bootargs "mem=496M console=ttyPS0,115200n8 earlycon root=/dev/mmcblk0p2 rootfstype=ext4 rw rootwait uio_pdrv_genirq.of_id=generic-uio"
+setenv bootargs "mem=496M console=ttyPS0,115200n8 earlycon clk_ignore_unused root=/dev/mmcblk0p2 rootfstype=ext4 rw rootwait uio_pdrv_genirq.of_id=generic-uio"
 bootm 0x08000000 - 0x07F00000
 EOF
 
@@ -109,9 +115,9 @@ EOF
     cp -f spl/boot.bin "${BOOTIMG_ROOT}/boot.bin" || { echo "Error: Failed to copy boot.bin"; exit 1; }
     cp -f u-boot.img "${BOOTIMG_ROOT}/u-boot.img" || { echo "Error: Failed to copy u-boot.img"; exit 1; }
     # <vivado-project>/<project>.runs/impl_1/<top_module>.bit
-    cp -f "../S9_DEBIAN/boot/${BOARD}/hw/system_bd_wrapper.bit" "${BOOTIMG_ROOT}/system.bit" || { echo "Error: Failed to copy system.bit"; exit 1; }
+    cp -f "../S9_DEBIAN/hdl/s9switcher.runs/impl_1/system_bd_wrapper.bit" "${BOOTIMG_ROOT}/system.bit" || { echo "Error: Failed to copy system.bit"; exit 1; }
     cp -f "../S9_DEBIAN/linux/uImage" "${BOOTIMG_ROOT}/uImage" || { echo "Error: Failed to copy uImage"; exit 1; }
-    cp -f "./arch/arm/dts/zynq-${BOARD}.dtb" "${BOOTIMG_ROOT}/zynq-${BOARD}.dtb" || { echo "Error: Failed to copy zynq-${BOARD}.dtb"; exit 1; }
+    dtc -I dts -O dtb -o "${BOOTIMG_ROOT}/zynq-${BOARD}.dtb" "../S9_DEBIAN/boot/${BOARD}/devicetree.dts" || { echo "Error: Failed to compile zynq-${BOARD}.dtb"; exit 1; }
     ./tools/mkimage -C none -A arm -T script -d boot.cmd "${BOOTIMG_ROOT}/boot.scr" || { echo "Error: Failed to generate boot.scr"; exit 1; }
 
     echo "Boot script and U-Boot binary copied to ${BOOTIMG_ROOT}"
@@ -178,7 +184,7 @@ if [ ! -f .config ]; then
     ./scripts/config --set-val CONFIG_BOOTDELAY 15
     ./scripts/config --enable CONFIG_USE_BOOTCOMMAND
     ./scripts/config --set-str CONFIG_BOOTCOMMAND "fatload mmc 0:1 0x1000000 boot.scr && source 0x1000000"
-    
+
     make olddefconfig
 fi
 
