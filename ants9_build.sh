@@ -17,10 +17,88 @@ if grep -qi 'Microsoft' <<< "$(uname -r)"; then
     fi
 fi
 
+
 export ARCH=arm
 export CROSS_COMPILE=arm-linux-gnueabihf-
 VENDOR=jsgrd
 BOARD=ants9
+HOSTNAME=zync01.local
+USERNAME=debian
+
+VIVADO_PROJECT=../DEBIAN_S9/hdl/s9switcher.xpr
+VITIS_PLATFORM_DIR=../DEBIAN_S9/boot/${BOARD}/export/ants9/hw
+
+function compile_vivado_project_to_bitstream() {
+    if [ ! -f "$VIVADO_PROJECT" ]; then
+        echo "Error: Vivado project file not found at $VIVADO_PROJECT"
+        exit 1
+    fi
+
+    echo << EOF >$(dirname "$VIVADO_PROJECT")/compile_vivado_project.tcl
+     # Open your existing Vivado project
+open_project $(realpath "$VIVADO_PROJECT")
+
+# Reset and run synthesis & implementation through bitstream generation
+reset_run synth_1
+launch_runs impl_1 -to_step write_bitstream -jobs 8
+wait_on_run impl_1
+
+# Verify bitstream generation succeeded before exporting
+if {[get_property PROGRESS [get_runs impl_1]] != "100%"} {
+    error "ERROR: Implementation or Bitstream generation failed!"
+}
+
+# Open the implemented design in memory (required for reliable XSA export)
+open_run impl_1
+
+# Export the XSA with the bitstream includedsystem_bd_wrapper
+write_hw_platform -fixed -include_bit -force -file $(dirname "$(realpath "$VIVADO_PROJECT")")/system_bd_wrapper.xsa
+
+close_project
+EOF
+
+    echo "Compiling Vivado project to generate bitstream..."
+    vivado -mode batch -source compile_vivado_project.tcl -tclargs "$VIVADO_PROJECT"
+    if [ $? -ne 0 ]; then
+        echo "Error: Vivado project compilation failed."
+        exit 1
+    fi
+    echo "Vivado project compiled successfully. Bitstream generated."
+   
+}
+
+function recompile_vitis_platform() {
+    VITIS_PLATFORM_DIR=../S9_DEBIAN/boot/${BOARD}/export/ants9/hw
+    if [ ! -d "$VITIS_PLATFORM_DIR" ]; then
+        echo "Error: Vitis platform directory not found at $VITIS_PLATFORM_DIR"
+        exit 1
+    fi
+    echo <<EOF >$(dirname "$VITIS_PLATFORM_DIR")/recompile_vitis_platform.py
+import vitis
+
+client = vitis.create_client()
+client.set_workspace(path="$(realpath "$VITIS_PLATFORM_DIR")")
+
+# 1. Update the platform with the new XSA
+platform = client.get_component(name="${BOARD}")
+platform.update_hw(hw_design="$(dirname "$(realpath "$VIVADO_PROJECT")")/system_bd_wrapper.xsa")
+
+# 2. Rebuild the platform and application
+platform.build()
+#app = client.get_component(name="${BOARD}")
+#app.build()
+
+vitis.dispose()
+EOF
+    # Run the Python script to recompile the Vitis platform
+    echo "Recompiling Vitis platform..."
+    python3 "$(dirname "$VITIS_PLATFORM_DIR")/recompile_vitis_platform.py"
+    if [ $? -ne 0 ]; then
+        echo "Error: Vitis platform recompilation failed."
+        exit 1
+    fi
+    echo "Vitis platform recompiled successfully."
+}
 
 function update_platform() {
     echo "Copying device tree source from ../S9_DEBIAN/boot/${BOARD}/devicetree.dts to dts/upstream/src/arm/xilinx/zynq-${BOARD}.dts"
@@ -128,6 +206,57 @@ EOF
     echo "Boot script and U-Boot binary copied to ${BOOTIMG_ROOT}"
 }
 
+function send_to_board() {
+    if [ ! -f u-boot.img ]; then
+        echo "Error: U-Boot binary (u-boot.img) not found. Please build U-Boot first."
+        exit 1
+    fi
+
+    echo "Checking auto-accept of SSH host key for ${HOSTNAME}..."
+    ssh-keygen -F ${HOSTNAME} > /dev/null
+    if [ $? -ne 0 ]; then
+        echo "SSH host key for ${HOSTNAME} not found. Attempting to add it automatically..."
+        ssh-keyscan -H ${HOSTNAME} >> ~/.ssh/known_hosts
+        if [ $? -ne 0 ]; then
+            echo "Error: Failed to add SSH host key for ${HOSTNAME}. Please check your network connection and ensure the board is reachable."
+            exit 1
+        fi
+    fi
+
+    echo "Copying BOOTFAT contents to board ${HOSTNAME} via scp..."
+    scp -r ../S9_DEBIAN/BOOTFAT/* ${USERNAME}@${HOSTNAME}:/home/${USERNAME}/new_boot/
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to copy files to board ${HOSTNAME}"
+        exit 1
+    fi
+
+    echo "Launching update_boot_partition script on board ${HOSTNAME}..."
+    ssh ${USERNAME}@${HOSTNAME} "
+        cd /home/${USERNAME} && \
+        sudo bash ./update_boot_partition
+    "
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to execute update_boot_partition on board ${HOSTNAME}"
+        exit 1
+    fi
+
+    echo "U-Boot and boot files successfully sent to board ${HOSTNAME}."
+
+    echo "Rebooting the board ${HOSTNAME}..."
+    ssh ${USERNAME}@${HOSTNAME} "sudo reboot"
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to reboot the board ${HOSTNAME}"
+        exit 1
+    fi
+
+    echo "Board ${HOSTNAME} is rebooting. Waiting for it to come back online..."
+    while ! ping -c 1 ${HOSTNAME} &> /dev/null; do
+        echo "Waiting for board ${HOSTNAME} to respond to ping..."
+        sleep 5
+    done
+
+    echo "Board ${HOSTNAME} is back online."
+}
 
 # delete .config if argument is passed to the script -f, forcing a rebuild of U-Boot. 
 for arg in "$@"; do
@@ -149,12 +278,17 @@ for arg in "$@"; do
         generate_boot_script
         exit 0
     fi
+    if [ "$arg" == "-s" ]; then
+        send_to_board
+        exit 0
+    fi
     if [ "$arg" == "-h" ] || [ "$arg" == "--help" ]; then
         echo "Usage: $0 [-f] [-p] [-c] [-h|--help]"
         echo "  -f    Force rebuild of U-Boot by deleting .config"
         echo "  -p    Update platform files for ${BOARD} and exit."
         echo "  -b    Update boot script and copy U-Boot binary to BOOTIMG_ROOT and exit."
         echo "  -c    Clean build artifacts by running 'make clean' and exit."
+        echo "  -s    Send to the board via scp."
         echo "  -h    Show this help message"
         exit 0
     fi
