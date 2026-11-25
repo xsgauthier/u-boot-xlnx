@@ -259,6 +259,8 @@ function send_to_board() {
 }
 
 # delete .config if argument is passed to the script -f, forcing a rebuild of U-Boot. 
+EXIT_AFTER_OPTION=0
+
 for arg in "$@"; do
     if [ "$arg" == "-f" ]; then
         echo "Forcing rebuild of U-Boot by deleting .config"
@@ -267,20 +269,20 @@ for arg in "$@"; do
     if [ "$arg" == "-p" ]; then
         echo "Updating platform files for ${BOARD}"
         update_platform
-        exit 0
+        EXIT_AFTER_OPTION=1
     fi
     if [ "$arg" == "-c" ]; then
         echo "Cleaning build artifacts"
         make clean
-        exit 0
+        EXIT_AFTER_OPTION=1
     fi
     if [ "$arg" == "-b" ]; then
         generate_boot_script
-        exit 0
+        EXIT_AFTER_OPTION=1
     fi
     if [ "$arg" == "-s" ]; then
         send_to_board
-        exit 0
+        EXIT_AFTER_OPTION=1
     fi
     if [ "$arg" == "-h" ] || [ "$arg" == "--help" ]; then
         echo "Usage: $0 [-f] [-p] [-c] [-h|--help]"
@@ -293,6 +295,10 @@ for arg in "$@"; do
         exit 0
     fi
 done
+
+if [ $EXIT_AFTER_OPTION -ne 0 ]; then
+    exit 0
+fi
 
 if [ ! -f .config ]; then
     echo "No .config file found. Generating default configuration for ${BOARD}."
